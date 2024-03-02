@@ -1,53 +1,47 @@
 import os
-import cv2
-from os.path import isfile, join
-import shutil
-import glob
 import torch
 import torchvision
 import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 import torch.utils.data
-from PIL import Image, ImageOps
-import re
+
+# each folder contains 46 images, each folder represents a class
+Train_folder = 'D:\\XXX\\Train'
+Test_folder = 'D:\\XXX\\Test'
+
+# list of classes (names of the folders)
+classes = sorted(os.listdir(Train_folder))
 
 
-
-training_folder_name = 'D:\\fixedSplit\\Train'
-
-classes = sorted(os.listdir(training_folder_name))
-
-# В папке - 10 папок для классов, в каждой - первые 46 изображений
-train_folder_p = 'D:\\fixedSplit\\Train'
-
-# В папке - 10 папок для классов, в каждой - последние 46 изображений
-test_folder_p = 'D:\\fixedSplit\\Test'
-
-
-
-
-
-
-def load_dataset(data_path_train, data_path_test):
+def load_dataset(data_path_train: str, data_path_test: str):
+    """
+    Data loader. Data transformations have been applied to the images.
+    transforms.AutoAugment() shows the same increase in accuracy as commented transformations.
+    """
+    # Original train set of images was too small to provide enough images \
+    # Data augmentation applied to solve the problem
     transformation_train_augmentation = transforms.Compose([
         transforms.Grayscale(),
-        # transforms.Resize((128, 128)),
         transforms.AutoAugment(),
+
         # transforms.RandomRotation((-30, 30)),
         # transforms.RandomHorizontalFlip(0.9),
         # transforms.RandomVerticalFlip(0.9),
+        # transforms.Resize((128, 128)),
+
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5], std=[0.5])
     ])
 
+    # Transformations applied to the train set of images
     transformation_train = transforms.Compose([
         transforms.Grayscale(),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5], std=[0.5])
     ])
 
+    # Transformations applied to the test set of images
     transformation_test = transforms.Compose([
         transforms.Grayscale(),
         transforms.ToTensor(),
@@ -69,43 +63,50 @@ def load_dataset(data_path_train, data_path_test):
         transform=transformation_test
     )
 
+    # 30% images taken out of the train set to create the validation set
     train_size = int(0.7 * len(train_dataset_normal))
     val_size = len(train_dataset_normal) - train_size
-    train_dataset_normal_split, val_dataset = torch.utils.data.random_split(train_dataset_normal, [train_size, val_size])
 
-    Augmented_train_dataset_full = torch.utils.data.ConcatDataset([train_dataset_normal_split, train_dataset_augmented])
+    Train_set_after_validation_excluded, val_dataset = torch.utils.data.random_split(train_dataset_normal,
+                                                                                     [train_size, val_size])
 
-    train_loader = torch.utils.data.DataLoader(
-        Augmented_train_dataset_full,
+    Train_set_augmented = torch.utils.data.ConcatDataset([Train_set_after_validation_excluded, train_dataset_augmented])
+
+    # Set Batch size to whatever suits the task
+    Train_loader = torch.utils.data.DataLoader(
+        Train_set_augmented,
         batch_size=46,
         num_workers=0,
         shuffle=True
     )
 
-    val_loader = torch.utils.data.DataLoader(
+    Validation_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=46,
         num_workers=0,
         shuffle=True
     )
 
-    test_loader = torch.utils.data.DataLoader(
+    Test_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=460,
         num_workers=0,
         shuffle=False
     )
 
-    return train_loader, val_loader, test_loader
+    return Train_loader, Validation_loader, Test_loader
 
 
-train_loader, val_loader, test_loader = load_dataset(train_folder_p, test_folder_p)
+train_loader, val_loader, test_loader = load_dataset(Train_folder, Test_folder)
 
 batch_size = train_loader.batch_size
 
 
 class Net(nn.Module):
-
+    """
+    in_channels=1 since images are grayscale. Change to "3" if the task requires so (RGB images)
+    Both nn.BatchNorm2d and nn.Dropout(p=0.3) prevent overfitting quite well
+    """
     def __init__(self, num_classes=len(classes)):
         super(Net, self).__init__()
 
@@ -144,15 +145,12 @@ class Net(nn.Module):
 
         x = self.fully_connected2(x)
 
-        # x = self.fully_connected(x)
-
         return x
 
 
 device = "cpu"
 if torch.cuda.is_available():
     device = "cuda"
-
 
 model = Net(num_classes=len(classes)).to(device)
 
@@ -183,7 +181,6 @@ def train(model, device, train_loader, optimizer, epoch):
         print('\tTraining batch {} Loss: {:.6f}'.format(batch_idx + 1, loss.item()))
 
     avg_loss_train = train_loss / (batch_idx + 1)
-    # print('Training set: Average loss: {:.6f}'.format(avg_loss_train))
 
     print('Training set: loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         avg_loss_train, correct_train, len(train_loader.dataset),
@@ -191,33 +188,29 @@ def train(model, device, train_loader, optimizer, epoch):
     return avg_loss_train
 
 
-def Validation(model, device, val_load):
-    model.eval()
-    break_check = []
+def Validation(Selected_model, Device_used, val_load):
+    Selected_model.eval()
     val_loss = 0
     correct_val = 0
     with torch.no_grad():
         batch_count = 0
         for data, target in val_load:
             batch_count += 1
-            data, target = data.to(device), target.to(device)
+            data, target = data.to(Device_used), target.to(Device_used)
 
-            output = model(data)
+            output = Selected_model(data)
 
             val_loss += loss_criteria(output, target).item()
 
             _, predicted = torch.max(output.data, 1)
             correct_val += torch.sum(target == predicted).item()
 
-            break_check_number = int((100 * correct_val/len(val_load.dataset)))
-            break_check.append(break_check_number)
-
     avg_loss_val = val_loss / batch_count
     print('Validation set: loss: {:.6f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         avg_loss_val, correct_val, len(val_load.dataset),
         100. * correct_val / len(val_load.dataset)))
 
-    return avg_loss_val, break_check
+    return avg_loss_val
 
 
 def Check_accuracy(model, device, test_loader):
@@ -244,12 +237,14 @@ def Check_accuracy(model, device, test_loader):
         100. * correct_test / len(test_loader.dataset)))
 
 
-weight_decay =1e-4
-optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=weight_decay)
+# Optimizer selection, as well as hyperparameter tuning
+optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 loss_criteria = nn.CrossEntropyLoss()
 
-
+# set the number of epochs. 96% accuracy acquired at 50th epoch and 46 batch size.
 epochs = 300
+
+
 for epoch in range(1, epochs + 1):
     train(model, device, train_loader, optimizer, epoch)
     Validation(model, device, val_loader)
