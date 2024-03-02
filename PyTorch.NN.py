@@ -6,9 +6,10 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data
 
-# each folder contains 46 images, each folder represents a class
-Train_folder = 'D:\\XXX\\Train'
-Test_folder = 'D:\\XXX\\Test'
+# Set path to the folder that contrains subfolders with images of different classes.
+# Example: 'D:\\XXX\\Train' contains 'D:\\XXX\\Train\\Class_1', 'D:\\XXX\\Train\\Class_2', etc.
+Train_folder = '...\\Train'
+Test_folder = '...\\Test'
 
 # list of classes (names of the folders)
 classes = sorted(os.listdir(Train_folder))
