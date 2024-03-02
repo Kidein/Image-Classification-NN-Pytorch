@@ -249,7 +249,6 @@ optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=weight_decay)
 loss_criteria = nn.CrossEntropyLoss()
 
 
-
 epochs = 300
 for epoch in range(1, epochs + 1):
     train(model, device, train_loader, optimizer, epoch)
