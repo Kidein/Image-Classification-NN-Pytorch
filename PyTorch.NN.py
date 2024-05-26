@@ -12,7 +12,8 @@ Test_folder = 'D:\\XXX\\Test'
 
 # list of classes (names of the folders)
 classes = sorted(os.listdir(Train_folder))
-
+epochs = 300
+batch_size = 46
 
 def load_dataset(data_path_train: str, data_path_test: str):
     """
@@ -75,14 +76,14 @@ def load_dataset(data_path_train: str, data_path_test: str):
     # Set Batch size to whatever suits the task
     Train_loader = torch.utils.data.DataLoader(
         Train_set_augmented,
-        batch_size=46,
+        batch_size=batch_size,
         num_workers=0,
         shuffle=True
     )
 
     Validation_loader = torch.utils.data.DataLoader(
         val_dataset,
-        batch_size=46,
+        batch_size=batch_size,
         num_workers=0,
         shuffle=True
     )
@@ -242,7 +243,7 @@ optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 loss_criteria = nn.CrossEntropyLoss()
 
 # set the number of epochs. 96% accuracy acquired at 50th epoch and 46 batch size.
-epochs = 300
+
 
 
 for epoch in range(1, epochs + 1):
