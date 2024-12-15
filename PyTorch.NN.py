@@ -16,87 +16,71 @@ classes = sorted(os.listdir(Train_folder))
 epochs = 300
 batch_size = 46
 
-def load_dataset(data_path_train: str, data_path_test: str):
+def load_dataset(data_path_train: str, data_path_test: str, image_size=(128, 128), mean=0.5, std=0.5):
     """
-    Data loader. Data transformations have been applied to the images.
-    transforms.AutoAugment() shows the same increase in accuracy as commented transformations.
+    Data loader with transformations for training, validation, and testing.
     """
-    # Original train set of images was too small to provide enough images \
-    # Data augmentation applied to solve the problem
-    transformation_train_augmentation = transforms.Compose([
-        transforms.Grayscale(),
-        transforms.AutoAugment(),
-
-        # transforms.RandomRotation((-30, 30)),
-        # transforms.RandomHorizontalFlip(0.9),
-        # transforms.RandomVerticalFlip(0.9),
-        # transforms.Resize((128, 128)),
-
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
-    ])
-
-    # Transformations applied to the train set of images
+    # Transformations
     transformation_train = transforms.Compose([
         transforms.Grayscale(),
+        transforms.Resize(image_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
+        transforms.Normalize(mean=[mean], std=[std])
     ])
 
-    # Transformations applied to the test set of images
+    transformation_train_augmentation = transforms.Compose([
+        transforms.Grayscale(),
+        transforms.Resize(image_size),
+        transforms.RandomRotation((-30, 30)),
+        transforms.RandomHorizontalFlip(0.5),
+        transforms.RandomVerticalFlip(0.5),
+        # transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
+        transforms.RandomErasing(p=0.3),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[mean], std=[std])
+    ])
+
     transformation_test = transforms.Compose([
         transforms.Grayscale(),
+        transforms.Resize(image_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
+        transforms.Normalize(mean=[mean], std=[std])
     ])
+
 
     train_dataset_normal = torchvision.datasets.ImageFolder(
         root=data_path_train,
         transform=transformation_train
     )
-
     train_dataset_augmented = torchvision.datasets.ImageFolder(
         root=data_path_train,
         transform=transformation_train_augmentation
     )
-
     test_dataset = torchvision.datasets.ImageFolder(
         root=data_path_test,
         transform=transformation_test
     )
 
-    # 30% images taken out of the train set to create the validation set
+n
+    torch.manual_seed(42)  
+
     train_size = int(0.7 * len(train_dataset_normal))
     val_size = len(train_dataset_normal) - train_size
-
-    Train_set_after_validation_excluded, val_dataset = torch.utils.data.random_split(train_dataset_normal,
-                                                                                     [train_size, val_size])
-
-    Train_set_augmented = torch.utils.data.ConcatDataset([Train_set_after_validation_excluded, train_dataset_augmented])
-
-    # Set Batch size to whatever suits the task
-    Train_loader = torch.utils.data.DataLoader(
-        Train_set_augmented,
-        batch_size=batch_size,
-        num_workers=0,
-        shuffle=True
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        train_dataset_normal, [train_size, val_size]
     )
 
-    Validation_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        num_workers=0,
-        shuffle=True
-    )
+    train_dataset = torch.utils.data.ConcatDataset([train_dataset, train_dataset_augmented])
 
-    Test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        batch_size=460,
-        num_workers=0,
-        shuffle=False
-    )
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, num_workers=os.cpu_count(), shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, num_workers=os.cpu_count(), shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, num_workers=os.cpu_count(), shuffle=False)
 
-    return Train_loader, Validation_loader, Test_loader
+    print(f"Training set size: {len(train_dataset)}")
+    print(f"Validation set size: {len(val_dataset)}")
+    print(f"Test set size: {len(test_dataset)}")
+
+    return train_loader, val_loader, test_loader
 
 
 train_loader, val_loader, test_loader = load_dataset(Train_folder, Test_folder)
